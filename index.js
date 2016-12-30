@@ -33,25 +33,26 @@ module.exports = [function(){
            	var flag = true,
            		isDown = false,			//松手移动计算标志
            		isTransition = false;   //移动复位计算标志
+           	var isRefresh = false,      //下拉刷新标志
+           		isLoadMore = false;		//上拉加载标志
            	var rAF = window.requestAnimationFrame;
            	var moveValue = 0;
 
             //下拉模块添加提示元素
 		    function initReminder(){
 		    	reminderDom.dom = document.createElement('div');
-		    	reminderDom.loading = document.createElement('span');
 		    	reminderDom.direction = document.createElement('i');
 		    	reminderDom.text = document.createElement('p');
 
 		    	reminderDom.dom.className = 'swipescroll-reminder';
 		    	reminderDom.direction.className ='cicon icon-dropdown';
-		    	reminderDom.loading.className = 'loading';
 		    	reminderDom.text.innerText = '下拉刷新';
 
 		    	reminderDom.dom.appendChild(reminderDom.direction);
 		    	reminderDom.dom.appendChild(reminderDom.text);	
 		    	scroll.insertBefore(reminderDom.dom,scroll.firstElementChild);
 		    }
+
 		    //初始化事件
 		    function initEvent(){
 	            //滑动开始事件
@@ -98,6 +99,7 @@ module.exports = [function(){
 	            		}
 	            });
 		    }
+
             //滑动事件开始
             var touchEventStart = function(clientY,timeStamp,scrollHeight,clientHeight){
             	//清除定时器
@@ -132,6 +134,21 @@ module.exports = [function(){
             				slide.moveY *= slide.buffer/(slide.buffer+slide.moveY);
             				//slide.moveY移动一定距离 触发刷新
 
+  							//判断是否下拉刷新
+  							if(slide.moveY > 80){
+  								isRefresh = true;
+  								rAF(function(){
+  									reminderDom.direction.style.WebkitTransform = 'rotate(180deg)';
+  								});
+  							}else{
+  								if(isRefresh){
+  									rAF(function(){
+	  									reminderDom.direction.style.WebkitTransform = 'rotate(0deg)';
+	  								});
+	  								isRefresh = false;
+  								}
+  							}
+
             			}else if(slide.moveY< slide.clientHeight - slide.scrollHeight){
             				//底部上拉缓冲阻力计算
             				slide.moveY += slide.scrollHeight- slide.clientHeight; //加上超出距离
@@ -139,8 +156,13 @@ module.exports = [function(){
             				//这个倍数-去 slide.scrollHight + slide.clientHighe的值
             				slide.moveY = slide.moveY*slide.buffer/(slide.buffer-slide.moveY)-slide.scrollHeight + slide.clientHeight;
 
-            				//slide.moveY移动一定距离 触发加载
+            				//慢速滑动到达底部触发加载
+            				if(scope.ismore){
+            					clearInterval(timer);
+            					loadMore();
+            				}
             			}
+
             			setTransform(slide.moveY);
             		}
             		//快速滑动不断更新滑动距离用作松手计算
@@ -168,6 +190,11 @@ module.exports = [function(){
             			//向底部滑动限制
             			if(-slide.moveY-scrollHight > slide.limit){
             				clearInterval(timer);
+            				//判断是否需要加载
+            				if(scope.ismore){
+            					//复位后加载标志
+            					isLoadMore = true;
+            				}
             				//底部复位
             				Transition(-scrollHight);
             				return false;
@@ -190,6 +217,11 @@ module.exports = [function(){
             					Transition(0);
             					return false;
             				}else if(-slide.moveY > scrollHight){
+            					//判断是否需要加载
+	            				if(scope.ismore){
+	            					//复位后加载标志
+	            					isLoadMore = true;
+	            				}
             					Transition(-scrollHight);
             					return false;
             				}
@@ -208,6 +240,16 @@ module.exports = [function(){
             		if(Math.abs(slide.moveY - target) < 1){
             			slide.moveY = target;
             			clearInterval(timer);
+            			//判断是否需要上拉加载
+            			if(isLoadMore){
+            				isLoadMore = false;
+            				loadMore();
+            			}
+            			//判断是否需要下拉刷新
+            			if(isRefresh){
+            				isRefresh = false;
+            				doRefresh();
+            			}
             			isTransition = false;
             		}
             		setTransform(slide.moveY);
@@ -230,43 +272,22 @@ module.exports = [function(){
 		    function doRefresh(){
 		    	scope.refresh();
 		    	flag = false;
+		    	reminderDom.direction.style.WebkitTransform = 'rotate(0deg)';
 		    	//延时1S后结束并且重置
 		    	setTimeout(function(){
-		    		setTransform(0);
-		    		moveValue = 0
 		    		flag = true;
-		    		reminderHide();
-		    	},1000);
+		    	},500);
 		    }
 
 		    //发送上拉请求
 		    function loadMore(){
-				scope.loadMore();
+				scope.loadmore();
 		    	flag = false;
 		    	//延时1S后结束并且重置
 		    	setTimeout(function(){
 		    		flag = true;
-		    	},1000);
+		    	},500);
 		    }
-
-		     //请求切换loading
-		    function requestLoading(){
-		    	reminderDom.dom.removeChild(reminderDom.direction);
-		    	reminderDom.dom.removeChild(reminderDom.text);
-		    	//切换loading
-		    	reminderDom.dom.appendChild(reminderDom.loading);
-		    	//发送请求
-		    	doRefresh();
-		    }
-
-		    //隐藏提示元素并恢复初始化
-		    function reminderHide(){
-		    	reminderDom.direction.style.transform = 'rotate(0deg)';
-	    		reminderDom.dom.removeChild(reminderDom.loading);
-	    		reminderDom.dom.appendChild(reminderDom.direction);
-	    		reminderDom.dom.appendChild(reminderDom.text);    	
-		    }
-
 
 		    initReminder();
 		    initEvent();
